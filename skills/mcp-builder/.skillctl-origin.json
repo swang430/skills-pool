@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/anthropic-agent-skills/skills/mcp-builder",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "0f4592dcb53cf2b5d6b7febee6b4152018b565551a1c29e3c612f57b218ab295",
+  "external_source": "https://github.com/anthropics/skills.git",
+  "external_rel_dir": "skills/mcp-builder",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:03:32+08:00"
+}

@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-rfiwiru1/repo/mermaid-visualizer",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-rfiwiru1/repo",
+  "promoted_at": "2026-02-11T17:45:44+08:00",
+  "sha256": "93fff4e93adc82878c60557935dc75052f23331db9d3f5d6d3c137f2743bb72c",
+  "external_source": "https://github.com/axtonliu/axton-obsidian-visual-skills.git",
+  "external_rel_dir": "mermaid-visualizer",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-11T17:49:03+08:00"
+}

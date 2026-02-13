@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo/skills/.curated/notion-research-documentation",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo",
+  "promoted_at": "2026-02-10T09:52:28+08:00",
+  "sha256": "e88a46da978cf6f088a788fa92ee736df699a355a72f41f14bdc258bf3ef57e7",
+  "external_source": "https://github.com/openai/skills.git",
+  "external_rel_dir": "skills/.curated/notion-research-documentation",
+  "imported_via": "origin_backfill_hash_match",
+  "origin_backfilled_at": "2026-02-13T15:11:53+08:00"
+}

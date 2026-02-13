@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/claude-plugins-official/plugins/plugin-dev/skills/hook-development",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "f47e2d42f6360294216a859ae0c30b93caafdd2b2e5ffc007489ba4ca447fa5c",
+  "external_source": "https://github.com/anthropics/claude-plugins-official",
+  "external_rel_dir": "plugins/plugin-dev/skills/hook-development",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:33:00+08:00"
+}

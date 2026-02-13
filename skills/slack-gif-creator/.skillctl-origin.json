@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/anthropic-agent-skills/skills/slack-gif-creator",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "2efca615ce55a3edd8fc05c779068a8085816617991987e446606403cd3abb22",
+  "external_source": "https://github.com/anthropics/skills.git",
+  "external_rel_dir": "skills/slack-gif-creator",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:03:32+08:00"
+}

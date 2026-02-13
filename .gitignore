@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Virtual env
+.venv/
+venv/
+
+# Runtime/generated artifacts
+state/
+dist/
+index/
+trash/
+
+# Local editors
+.vscode/
+.idea/

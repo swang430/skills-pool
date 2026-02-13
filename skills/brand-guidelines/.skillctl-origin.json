@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/anthropic-agent-skills/skills/brand-guidelines",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "1120b3769e2985cefb3d25be981b1f914abeba57ae079b83c20c666c164fa9fe",
+  "external_source": "https://github.com/anthropics/skills.git",
+  "external_rel_dir": "skills/brand-guidelines",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:03:32+08:00"
+}

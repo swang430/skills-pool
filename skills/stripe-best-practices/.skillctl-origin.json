@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/claude-plugins-official/external_plugins/stripe/skills/stripe-best-practices",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "838eb4e00a22f817b8577be230600547441493bf8c7aa15b0ee7e04f71f875cf",
+  "external_source": "https://github.com/anthropics/claude-plugins-official",
+  "external_rel_dir": "external_plugins/stripe/skills/stripe-best-practices",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:33:00+08:00"
+}

@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/claude-plugins-official/plugins/plugin-dev/skills/skill-development",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "d51b4e20043b13e462aa86c47ea82d43e216eb292871538127f4b12a54e4944f",
+  "external_source": "https://github.com/anthropics/claude-plugins-official",
+  "external_rel_dir": "plugins/plugin-dev/skills/skill-development",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:33:00+08:00"
+}

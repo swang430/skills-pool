@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skillctl"
+version = "0.1.0"
+description = "本地轻量 Skill 管理器（扫描、升格、同步、TUI、Web）"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+web = ["fastapi>=0.100", "uvicorn>=0.23"]
+
+[project.scripts]
+skillctl = "skillctl.cli:main"
+
+[tool.setuptools]
+packages = ["skillctl"]

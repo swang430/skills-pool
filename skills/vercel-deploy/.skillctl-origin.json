@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo/skills/.curated/vercel-deploy",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo",
+  "promoted_at": "2026-02-10T09:52:28+08:00",
+  "sha256": "f1f3fa3ff57f87f8f32d77ed635b63416f200a1f976a8a8d3e23d12b30df3ae4",
+  "external_source": "https://github.com/openai/skills.git",
+  "external_rel_dir": "skills/.curated/vercel-deploy",
+  "imported_via": "origin_backfill_hash_match",
+  "origin_backfilled_at": "2026-02-13T15:11:53+08:00"
+}

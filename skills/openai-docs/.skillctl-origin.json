@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo/skills/.curated/openai-docs",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo",
+  "promoted_at": "2026-02-10T09:52:28+08:00",
+  "sha256": "100099568ce8887ccd961aad2aa824a6d6054d4e5e697625815cc6e1b30d54a7",
+  "external_source": "https://github.com/openai/skills.git",
+  "external_rel_dir": "skills/.curated/openai-docs",
+  "imported_via": "origin_backfill_hash_match",
+  "origin_backfilled_at": "2026-02-13T15:11:53+08:00"
+}

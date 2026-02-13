@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo/skills/.system/skill-installer",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-egoel7gq/repo",
+  "promoted_at": "2026-02-10T09:52:28+08:00",
+  "sha256": "09df0ea7921f63d51befae9fc8f71daece5ef49d7b96e35fff8b18d15d6afda7",
+  "external_source": "https://github.com/openai/skills.git",
+  "external_rel_dir": "skills/.system/skill-installer",
+  "imported_via": "origin_backfill_hash_match",
+  "origin_backfilled_at": "2026-02-13T15:11:53+08:00"
+}

@@ -1,0 +1,10 @@
+{
+  "source_path": "/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-3t_kt7z0/repo/skills/docx",
+  "workspace": "/private/var/folders/yp/qwyry2250l98qj4sbg0cmgd00000gp/T/skillctl-src-3t_kt7z0/repo",
+  "promoted_at": "2026-02-13T11:03:32+08:00",
+  "sha256": "71cfc398ee05221f21fddc797ea5523a59278feb3447c681db92fa9130ad2da3",
+  "external_source": "https://github.com/anthropics/skills.git",
+  "external_rel_dir": "skills/docx",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:03:32+08:00"
+}

@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/claude-plugins-official/plugins/plugin-dev/skills/mcp-integration",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "2bcc3b5e93924d7632218f494890f6e6f75a9248138bc97070bc62aea942dd49",
+  "external_source": "https://github.com/anthropics/claude-plugins-official",
+  "external_rel_dir": "plugins/plugin-dev/skills/mcp-integration",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:33:00+08:00"
+}

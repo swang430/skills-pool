@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/claude-plugins-official/plugins/hookify/skills/writing-rules",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "2994b5d3152243b1a1cbf8358e9d7c18f290f31a23920647f31053c3efdf990d",
+  "external_source": "https://github.com/anthropics/claude-plugins-official",
+  "external_rel_dir": "plugins/hookify/skills/writing-rules",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:33:00+08:00"
+}

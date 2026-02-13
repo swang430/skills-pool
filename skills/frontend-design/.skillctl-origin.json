@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/Simon/.claude/plugins/marketplaces/anthropic-agent-skills/skills/frontend-design",
+  "workspace": "/Users/Simon/.claude/plugins/marketplaces",
+  "promoted_at": "2026-02-10T10:15:00+08:00",
+  "sha256": "b81e2ff87ed8fa4d6c377ccb127a7254c9e6a77e3ae94f21e6b514f7bb2945a0",
+  "external_source": "https://github.com/anthropics/skills.git",
+  "external_rel_dir": "skills/frontend-design",
+  "imported_via": "fetch_from_source",
+  "imported_at": "2026-02-13T11:03:32+08:00"
+}
