@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from pathlib import Path
 
@@ -19,11 +20,12 @@ from .markets import get_market_view, list_market_views
 from .maintenance import audit_pool, delete_pool_skill, prune_broken_dist_symlinks, write_audit_report
 from .promote import discover_project_skills, promote_skill
 from .report import build_inventory_payload, load_latest_inventory, write_inventory_reports
-from .scanner import scan_environment
+from .scanner import parse_frontmatter, scan_environment
 from .syncer import parse_target_platforms, run_sync
 from .tracking import (
     add_tracked_source,
     check_tracked_sources,
+    get_tracked_source,
     import_from_tracked_source,
     list_tracked_sources,
     remove_tracked_source,
@@ -99,6 +101,7 @@ def _cmd_sync(args: argparse.Namespace) -> int:
             only=args.only,
             backup_conflicts=args.backup_conflicts,
             allowed_platforms=allowed,
+            selected_skills=args.skill or None,
         )
     except FileNotFoundError as exc:
         print(str(exc))
@@ -159,31 +162,274 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_market_views() -> None:
+    rows = list_market_views(include_missing=True)
+    print("常用 Skills Market:")
+    for idx, item in enumerate(rows, start=1):
+        status = "可用" if item.exists else "不可用"
+        print(f"{idx}. {item.id} | {item.name} | {status}")
+        print(f"   source: {item.source}")
+        print(f"   agent:  {item.agent_hint}")
+        print(f"   note:   {item.description}")
+
+    sources = discover_market_sources()
+    extras: list[str] = []
+    known = {item.source for item in rows}
+    for src in sources:
+        if str(src) not in known:
+            extras.append(str(src))
+    if extras:
+        print("")
+        print("自动发现的其他来源:")
+        for idx, src in enumerate(extras, start=1):
+            print(f"{idx}. {src}")
+
+
+def _skill_key(raw: str) -> str:
+    text = re.sub(r"[^a-z0-9_-]+", "-", str(raw).strip().lower())
+    text = re.sub(r"-{2,}", "-", text).strip("-")
+    return text
+
+
+def _pool_skill_keys(pool_dir: Path) -> tuple[set[str], int]:
+    root = pool_dir / "skills"
+    if not root.exists():
+        return set(), 0
+    keys: set[str] = set()
+    total = 0
+    for skill_md in root.glob("*/SKILL.md"):
+        total += 1
+        dir_name = skill_md.parent.name
+        key = _skill_key(dir_name)
+        if key:
+            keys.add(key)
+        front_name, _desc = parse_frontmatter(skill_md)
+        if front_name:
+            k2 = _skill_key(front_name)
+            if k2:
+                keys.add(k2)
+    return keys, total
+
+
+def _safe_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _read_targets_conf(pool_dir: Path) -> list[tuple[str, str, Path]]:
+    path = pool_dir / "config" / "targets.conf"
+    if not path.exists():
+        return []
+    rows: list[tuple[str, str, Path]] = []
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [x.strip() for x in line.split("|")]
+        if len(parts) < 3:
+            continue
+        platform = parts[0].lower()
+        dist_rel = parts[1]
+        target_raw = parts[2]
+        target_path = Path(target_raw).expanduser()
+        if not target_path.is_absolute():
+            target_path = (pool_dir / target_path).resolve()
+        rows.append((platform, dist_rel, target_path))
+    return rows
+
+
+def _count_target_skills(target_dir: Path) -> int:
+    if not target_dir.exists():
+        return 0
+    return sum(1 for _ in target_dir.glob("*/SKILL.md"))
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    ensure_pool_layout(cfg.pool_path)
+
+    pool_root = cfg.pool_path / "skills"
+    pool_total = sum(1 for _ in pool_root.glob("*/SKILL.md")) if pool_root.exists() else 0
+    tracked_all = list_tracked_sources(cfg, only_enabled=False)
+    tracked_enabled = list_tracked_sources(cfg, only_enabled=True)
+    targets = _read_targets_conf(cfg.pool_path)
+    inventory = load_latest_inventory(cfg.pool_path)
+
+    print("skillctl 状态总览")
+    print(f"- Pool 目录: {cfg.pool_path}")
+    print(f"- Pool skills: {pool_total}")
+    print(f"- Source 跟踪: {len(tracked_enabled)}/{len(tracked_all)} (enabled/total)")
+    print(
+        f"- Ecosystem: follow={len(cfg.follow_sources)} grant={len(cfg.grant_targets)} | "
+        f"auto_targets={','.join(granted_platforms(cfg.grant_targets)) or '(无)'}"
+    )
+    print(f"- 代理: {cfg.proxy_url or '(未设置)'}")
+    print(f"- NO_PROXY: {cfg.no_proxy or '(未设置)'}")
+    if inventory:
+        print(f"- 最近扫描: {inventory.get('scanned_at', '-')}")
+        print(f"- 最近扫描记录数: {inventory.get('total', 0)}")
+    else:
+        print("- 最近扫描: (无，建议先运行 scan)")
+
+    print("")
+    print("Agent 目标安装状态:")
+    if not targets:
+        print("- (未配置 targets.conf)")
+    else:
+        for platform, _dist_rel, target in targets:
+            count = _count_target_skills(target)
+            print(f"- {platform}: {count} skills | {target}")
+
+    if args.verbose and inventory:
+        by_agent = inventory.get("counts_by_agent", {})
+        if isinstance(by_agent, dict) and by_agent:
+            print("")
+            print("最近扫描统计（按 Agent）:")
+            for key in sorted(by_agent):
+                print(f"- {key}: {by_agent[key]}")
+    return 0
+
+
+def _cmd_source_markets(_args: argparse.Namespace) -> int:
+    _print_market_views()
+    return 0
+
+
+def _cmd_source_compare(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    ensure_pool_layout(cfg.pool_path)
+
+    source = (args.source or "").strip()
+    source_id = (args.id or "").strip().lower()
+    if source and source_id:
+        print("不能同时指定 --source 和 --id。")
+        return 2
+    if source_id:
+        row = get_tracked_source(cfg, source_id)
+        if not row:
+            print(f"未找到 tracked source: {source_id}")
+            return 2
+        source = row.source
+    if not source:
+        print("请提供 --source 或 --id。")
+        return 1
+
+    try:
+        _root, items = index_source(source, proxy=cfg.proxy_url, no_proxy=cfg.no_proxy)
+    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+        print(f"比较失败: {exc}")
+        return 2
+
+    pool_keys, pool_total = _pool_skill_keys(cfg.pool_path)
+    limit = args.limit if args.limit and args.limit > 0 else 1000
+    rows = items[:limit]
+    new_rows: list[tuple[str, str]] = []
+    existing_rows: list[tuple[str, str]] = []
+
+    for item in rows:
+        leaf = Path(item.rel_dir).name
+        in_pool = (_skill_key(item.name) in pool_keys) or (_skill_key(leaf) in pool_keys)
+        row = (item.name, item.rel_dir)
+        if in_pool:
+            existing_rows.append(row)
+        else:
+            new_rows.append(row)
+
+    print("Source 对比结果")
+    print(f"- source: {source}")
+    print(f"- source skills: {len(items)} (展示前 {len(rows)})")
+    print(f"- pool skills: {pool_total}")
+    print(f"- 新增候选: {len(new_rows)}")
+    print(f"- 已在 Pool: {len(existing_rows)}")
+
+    if new_rows:
+        print("")
+        print("新增候选:")
+        for name, rel in new_rows[:200]:
+            print(f"- {name} | {rel}")
+        if len(new_rows) > 200:
+            print(f"... 其余 {len(new_rows) - 200} 条")
+    elif args.show_existing and existing_rows:
+        print("")
+        print("已在 Pool:")
+        for name, rel in existing_rows[:120]:
+            print(f"- {name} | {rel}")
+        if len(existing_rows) > 120:
+            print(f"... 其余 {len(existing_rows) - 120} 条")
+    return 0
+
+
+def _cmd_pool_list(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    ensure_pool_layout(cfg.pool_path)
+
+    root = cfg.pool_path / "skills"
+    if not root.exists():
+        print("Pool 为空。")
+        return 0
+
+    targets = [x[0] for x in _read_targets_conf(cfg.pool_path)]
+    rows: list[tuple[str, str, str, str]] = []
+    for skill_dir in sorted(root.iterdir()):
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        name, _desc = parse_frontmatter(skill_md)
+        origin = _safe_json(skill_dir / ".skillctl-origin.json")
+        source = str(origin.get("external_source") or origin.get("source_path") or "-").strip() or "-"
+        distributed = [p for p in targets if (cfg.pool_path / "dist" / p / skill_dir.name).exists()]
+        rows.append(
+            (
+                skill_dir.name,
+                name or skill_dir.name,
+                source,
+                ",".join(distributed) if distributed else "-",
+            )
+        )
+
+    keyword = (args.filter or "").strip().lower()
+    if keyword:
+        rows = [x for x in rows if keyword in f"{x[0]} {x[1]} {x[2]}".lower()]
+
+    if not rows:
+        print("Pool 中无匹配 skill。")
+        return 0
+
+    limit = args.limit if args.limit and args.limit > 0 else len(rows)
+    rows = rows[:limit]
+    print(f"Pool skills: {len(rows)}")
+    for sid, name, source, dist_text in rows:
+        print(f"- {sid} | {name} | source:{source} | dist:{dist_text}")
+    return 0
+
+
+def _cmd_agent_list(_args: argparse.Namespace) -> int:
+    cfg = load_config()
+    ensure_pool_layout(cfg.pool_path)
+    rows = _read_targets_conf(cfg.pool_path)
+    if not rows:
+        print("未配置 Agent 目标（config/targets.conf 为空）。")
+        return 0
+    granted = set(granted_platforms(cfg.grant_targets))
+    print("Agent 目标:")
+    for platform, dist_rel, target in rows:
+        count = _count_target_skills(target)
+        mark = "Y" if platform in granted else "N"
+        print(f"- {platform} | granted:{mark} | local:{count} | dist:{dist_rel} | target:{target}")
+    return 0
+
+
 def _cmd_index(args: argparse.Namespace) -> int:
     cfg = load_config()
     ensure_pool_layout(cfg.pool_path)
 
     if args.markets:
-        rows = list_market_views(include_missing=True)
-        print("常用 Skills Market:")
-        for idx, item in enumerate(rows, start=1):
-            status = "可用" if item.exists else "不可用"
-            print(f"{idx}. {item.id} | {item.name} | {status}")
-            print(f"   source: {item.source}")
-            print(f"   agent:  {item.agent_hint}")
-            print(f"   note:   {item.description}")
-
-        sources = discover_market_sources()
-        extras: list[str] = []
-        known = {item.source for item in rows}
-        for src in sources:
-            if str(src) not in known:
-                extras.append(str(src))
-        if extras:
-            print("")
-            print("自动发现的其他来源:")
-            for idx, src in enumerate(extras, start=1):
-                print(f"{idx}. {src}")
+        _print_market_views()
         return 0
 
     try:
@@ -518,9 +764,98 @@ def _cmd_proxy(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="skillctl",
-        description="轻量本地 Skill 管理器（扫描 / 索引 / 下载 / 升格 / 同步 / 维护 / 生态管理 / 外部追踪 / TUI / Web）",
+        description="轻量本地 Skill 管理器（Source -> Pool -> Agent）。推荐先用 status/source/pool/agent 命令组。",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_status = sub.add_parser("status", aliases=["overview"], help="查看当前状态总览（推荐）")
+    p_status.add_argument("--verbose", action="store_true", help="显示更详细统计")
+    p_status.set_defaults(func=_cmd_status)
+
+    p_source = sub.add_parser("source", help="Source 工作流命令（推荐）")
+    sub_source = p_source.add_subparsers(dest="source_command", required=True)
+
+    p_source_markets = sub_source.add_parser("markets", help="列出内置常用 market")
+    p_source_markets.set_defaults(func=_cmd_source_markets)
+
+    p_source_add = sub_source.add_parser("add", help="新增并登记一个 Source")
+    p_source_add.add_argument("--agent", required=True, help="来源所属 agent id，例如 deepseek")
+    p_source_add.add_argument("--name", required=True, help="来源名称")
+    p_source_add.add_argument("--source", help="git 地址或本地目录")
+    p_source_add.add_argument("--market", help="使用常用 market id 作为来源（先用 source markets 查看）")
+    p_source_add.add_argument("--id", help="自定义 source id（默认自动生成）")
+    p_source_add.add_argument("--note", help="备注")
+    p_source_add.add_argument("--disabled", action="store_true", help="新增时先禁用")
+    p_source_add.add_argument("--no-follow", action="store_true", help="新增后不自动加入关注来源")
+    p_source_add.set_defaults(func=_cmd_track_add)
+
+    p_source_list = sub_source.add_parser("list", aliases=["ls"], help="列出已登记 Source")
+    p_source_list.add_argument("--all", action="store_true", help="包含 disabled 来源")
+    p_source_list.set_defaults(func=_cmd_track_list)
+
+    p_source_remove = sub_source.add_parser("remove", aliases=["rm"], help="删除已登记 Source")
+    p_source_remove.add_argument("--id", required=True, help="source id")
+    p_source_remove.set_defaults(func=_cmd_track_remove)
+
+    p_source_check = sub_source.add_parser("check", help="检查 Source 变化（新增/下线）")
+    p_source_check.add_argument("--id", help="仅检查一个 source id")
+    p_source_check.add_argument("--all", action="store_true", help="包含 disabled 来源")
+    p_source_check.add_argument("--show-all", action="store_true", help="打印全量技能列表")
+    p_source_check.add_argument("--no-update", action="store_true", help="只检查不更新快照")
+    p_source_check.set_defaults(func=_cmd_track_check)
+
+    p_source_compare = sub_source.add_parser("compare", help="比较 Source 与 Pool 差异")
+    p_source_compare.add_argument("--source", help="GitHub/Git source 地址")
+    p_source_compare.add_argument("--id", help="已登记 source id")
+    p_source_compare.add_argument("--limit", type=int, default=1000, help="最多比较多少条（默认 1000）")
+    p_source_compare.add_argument("--show-existing", action="store_true", help="当没有新增时，显示已在 Pool 的条目")
+    p_source_compare.set_defaults(func=_cmd_source_compare)
+
+    p_source_import = sub_source.add_parser("import", help="从已登记 Source 导入 skills")
+    p_source_import.add_argument("--id", required=True, help="source id")
+    p_source_import.add_argument("--skill", action="append", help="要导入的 skill 名或 rel_dir，可重复")
+    p_source_import.add_argument("--all", action="store_true", help="导入该来源全部 skills")
+    p_source_import.set_defaults(func=_cmd_track_import)
+
+    p_source_fetch = sub_source.add_parser("fetch", help="从任意 source/market 导入（不要求先 track）")
+    p_source_fetch.add_argument("--source", help="git 地址或本地目录")
+    p_source_fetch.add_argument("--market", help="常用 market id（与 --source 二选一）")
+    p_source_fetch.add_argument("--skill", help="指定 skill 名或相对目录")
+    p_source_fetch.add_argument("--all", action="store_true", help="下载来源中的全部 skills")
+    p_source_fetch.set_defaults(func=_cmd_fetch)
+
+    p_pool = sub.add_parser("pool", help="Pool 工作流命令（推荐）")
+    sub_pool = p_pool.add_subparsers(dest="pool_command", required=True)
+
+    p_pool_list = sub_pool.add_parser("list", aliases=["ls"], help="列出 Pool 中 skills")
+    p_pool_list.add_argument("--filter", help="按 id/名称/来源过滤")
+    p_pool_list.add_argument("--limit", type=int, default=200, help="最多显示条数（默认 200）")
+    p_pool_list.set_defaults(func=_cmd_pool_list)
+
+    p_pool_promote = sub_pool.add_parser("promote", help="将项目 skill 升格到 Pool")
+    p_pool_promote.add_argument("path", nargs="?", help="skill 目录或 SKILL.md 路径")
+    p_pool_promote.add_argument("--workspace", help="指定工作区目录（默认当前目录）")
+    p_pool_promote.add_argument("--list", action="store_true", help="先列出项目下发现的 skills")
+    p_pool_promote.set_defaults(func=_cmd_promote)
+
+    p_pool_maintain = sub_pool.add_parser("maintain", help="Pool 维护（体检、清理、删除）")
+    p_pool_maintain.add_argument("--prune-broken", action="store_true", help="先清理 dist 下失效软链接")
+    p_pool_maintain.add_argument("--delete", help="删除池内某个 skill（移动到 trash）")
+    p_pool_maintain.set_defaults(func=_cmd_maintain)
+
+    p_agent = sub.add_parser("agent", help="Agent 目标命令（推荐）")
+    sub_agent = p_agent.add_subparsers(dest="agent_command", required=True)
+
+    p_agent_list = sub_agent.add_parser("list", aliases=["ls"], help="列出 Agent 目标与本地安装状态")
+    p_agent_list.set_defaults(func=_cmd_agent_list)
+
+    p_agent_sync = sub_agent.add_parser("sync", help="同步 Pool 到 Agent")
+    p_agent_sync.add_argument("--dry-run", action="store_true", help="仅预览，不落盘")
+    p_agent_sync.add_argument("--prune", action="store_true", help="清理过期软链接")
+    p_agent_sync.add_argument("--only", help="仅同步指定平台，例如 codex,gemini")
+    p_agent_sync.add_argument("--skill", action="append", help="仅同步指定 skill id，可重复")
+    p_agent_sync.add_argument("--backup-conflicts", action="store_true", help="冲突时自动备份")
+    p_agent_sync.set_defaults(func=_cmd_sync)
 
     p_init = sub.add_parser("init", help="初始化配置与 pool 目录")
     p_init.add_argument("--pool-dir", help="skills pool 根目录")
@@ -540,6 +875,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("--dry-run", action="store_true", help="仅预览，不落盘")
     p_sync.add_argument("--prune", action="store_true", help="清理过期软链接")
     p_sync.add_argument("--only", help="仅同步指定平台，例如 codex,gemini")
+    p_sync.add_argument("--skill", action="append", help="仅同步指定 skill id，可重复")
     p_sync.add_argument("--backup-conflicts", action="store_true", help="冲突时自动备份")
     p_sync.set_defaults(func=_cmd_sync)
 

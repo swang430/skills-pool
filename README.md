@@ -36,32 +36,20 @@ python3 skillctl.py web
 ### 常用 CLI 命令
 
 ```bash
-# 初始化
-python3 skillctl.py init
+# 推荐新命令组（Source -> Pool -> Agent）
+python3 skillctl.py status
+python3 skillctl.py source markets
+python3 skillctl.py source add --agent deepseek --name "deepseek-skills" --source https://github.com/<org>/<repo>.git
+python3 skillctl.py source compare --id deepseek-skills
+python3 skillctl.py source import --id deepseek-skills --all
+python3 skillctl.py pool list --limit 20
+python3 skillctl.py agent list
+python3 skillctl.py agent sync --prune
 
-# 启动 Web UI
-python3 skillctl.py web --host 127.0.0.1 --port 8765
-
-# 扫描本地环境
-python3 skillctl.py scan
-
-# 查看内置 market
+# 仍保留兼容旧命令（track/index/fetch/sync/promote）
+python3 skillctl.py track list --all
 python3 skillctl.py index --markets
-
-# 索引远程来源
-python3 skillctl.py index --source https://github.com/openai/skills.git
-
-# 导入来源（按 skill 或全量）
-python3 skillctl.py fetch --source https://github.com/openai/skills.git --skill skills/foo
 python3 skillctl.py fetch --source https://github.com/openai/skills.git --all
-
-# 跟踪来源（新增 / 检查 / 导入）
-python3 skillctl.py track add --agent deepseek --name "deepseek-skills" --source https://github.com/<org>/<repo>.git
-python3 skillctl.py track check --id deepseek-skills
-python3 skillctl.py track import --id deepseek-skills --all
-
-# 同步到目标 Agent
-python3 skillctl.py sync --prune
 ```
 
 ### 网络代理
@@ -111,32 +99,20 @@ Default Web URL: `http://127.0.0.1:8765`
 ### Common CLI Commands
 
 ```bash
-# Initialize
-python3 skillctl.py init
+# Recommended command groups (Source -> Pool -> Agent)
+python3 skillctl.py status
+python3 skillctl.py source markets
+python3 skillctl.py source add --agent deepseek --name "deepseek-skills" --source https://github.com/<org>/<repo>.git
+python3 skillctl.py source compare --id deepseek-skills
+python3 skillctl.py source import --id deepseek-skills --all
+python3 skillctl.py pool list --limit 20
+python3 skillctl.py agent list
+python3 skillctl.py agent sync --prune
 
-# Start Web UI
-python3 skillctl.py web --host 127.0.0.1 --port 8765
-
-# Scan local environment
-python3 skillctl.py scan
-
-# List built-in markets
+# Legacy commands are still supported (track/index/fetch/sync/promote)
+python3 skillctl.py track list --all
 python3 skillctl.py index --markets
-
-# Index a remote source
-python3 skillctl.py index --source https://github.com/openai/skills.git
-
-# Fetch from source (single or all)
-python3 skillctl.py fetch --source https://github.com/openai/skills.git --skill skills/foo
 python3 skillctl.py fetch --source https://github.com/openai/skills.git --all
-
-# Track source (add / check / import)
-python3 skillctl.py track add --agent deepseek --name "deepseek-skills" --source https://github.com/<org>/<repo>.git
-python3 skillctl.py track check --id deepseek-skills
-python3 skillctl.py track import --id deepseek-skills --all
-
-# Sync to target agents
-python3 skillctl.py sync --prune
 ```
 
 ### Network Proxy
