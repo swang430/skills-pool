@@ -718,8 +718,6 @@ def _build_topology_rows(
         inventory_payload=inventory_payload,
         available_platforms=available,
     )
-    installed_counts = _installed_skill_counts(cfg.pool_path)
-    drift_counts = Counter(item.get("agent", "") for item in drift_rows)
     _pool_keys, pool_total = _pool_skill_keys(cfg.pool_path)
 
     rows: list[dict[str, Any]] = []
@@ -762,51 +760,26 @@ def _build_topology_rows(
         }
     )
 
+    target_total = 0
+    target_granted = 0
     for row in eco_rows:
         if not row.get("can_consume", False):
             continue
-        platform = str(row.get("sync_platform", "-"))
-        platform_key = platform.lower() if platform and platform != "-" else ""
         target_id = str(row.get("id", ""))
         if target_id not in known_target_ids and not bool(row.get("granted", False)):
-            # follow-only 的自定义来源（如 openai/axton）不再显示为 target。
+            # follow-only 的自定义来源（如 openai/axton）不计入 target 统计。
             continue
 
-        local_total = installed_counts.get(platform_key, 0) if platform_key else 0
-        drift_total = int(drift_counts.get(target_id, 0))
-
-        status_bits: list[str] = []
-        status_bits.append("grant" if bool(row.get("granted")) else "未grant")
-        if row.get("auto_sync_ready"):
-            status_bits.append("auto-sync")
-        elif platform_key:
-            status_bits.append("待配置")
-        else:
-            status_bits.append("手动")
-
-        rows.append(
-            {
-                "layer": "target",
-                "id": target_id,
-                "name": str(row.get("name", target_id)),
-                "owner": target_id,
-                "location": platform if platform and platform != "-" else "(无自动平台)",
-                "skills": f"{local_total}",
-                "status": ", ".join(status_bits),
-                "drift": drift_total,
-                "updated_at": (inventory_payload or {}).get("scanned_at", "-"),
-                "tracked": bool(row.get("followed", False)),
-                "enabled": bool(row.get("granted", False)),
-                "from_market": "",
-            }
-        )
+        target_total += 1
+        if bool(row.get("granted", False)):
+            target_granted += 1
 
     summary = {
         "source_total": sum(1 for x in rows if x.get("layer") == "source"),
         "source_tracked": sum(1 for x in rows if x.get("layer") == "source" and x.get("tracked")),
         "pool_total": pool_total,
-        "target_total": sum(1 for x in rows if x.get("layer") == "target"),
-        "target_granted": sum(1 for x in rows if x.get("layer") == "target" and x.get("enabled")),
+        "target_total": target_total,
+        "target_granted": target_granted,
         "drift_total": len(drift_rows),
     }
     return rows, summary
@@ -1489,10 +1462,58 @@ def _page_html() -> str:
       min-width: 0;
       flex: 1;
     }
-    .summary-chips-title {
+    .summary-core {
+      border: 1px solid #e2d4bf;
+      border-radius: 12px;
+      background: rgba(255, 252, 246, 0.86);
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    .summary-subgrid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .summary-sources-title {
       font-size: 12px;
-      color: var(--muted);
+      color: #334155;
+      font-weight: 650;
       margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .source-chip-cloud {
+      max-height: 120px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .summary-drift-panel .table-scroll.short { max-height: 210px; }
+    .task-panel {
+      border: 1px solid #d9ccb7;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(246, 242, 236, 0.9));
+      margin-bottom: 2px;
+    }
+    .task-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .task-stat {
+      border: 1px solid #e1d3be;
+      border-radius: 9px;
+      padding: 6px 7px;
+      background: #fff;
+      font-size: 12px;
+      color: #475569;
+    }
+    .task-stat b {
+      display: block;
+      font-size: 18px;
+      line-height: 1.05;
+      color: #0f172a;
+      margin-top: 2px;
     }
     .split-2 {
       display: grid;
@@ -1521,7 +1542,31 @@ def _page_html() -> str:
     }
     .source-shell {
       display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
       gap: 10px;
+      align-items: start;
+    }
+    .source-side-stack {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .source-mobile-tabs {
+      display: none;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 2px;
+    }
+    .source-mobile-tabs button {
+      border-radius: 999px;
+      padding: 7px 8px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .source-mobile-tabs button.active {
+      background: linear-gradient(160deg, var(--accent2), #0e4b95);
+      color: #fff;
+      border-color: transparent;
     }
     .source-form {
       padding: 11px;
@@ -1529,7 +1574,7 @@ def _page_html() -> str:
     }
     .source-form-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, 0.8fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       align-items: end;
     }
@@ -1553,20 +1598,14 @@ def _page_html() -> str:
       font-size: 12px;
       font-weight: 560;
     }
-    .source-split {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-      gap: 10px;
-      align-items: start;
-    }
     .source-compare-grid {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.3fr);
+      grid-template-columns: 1fr;
       gap: 8px;
       align-items: end;
     }
     .source-compare .btn-row button { flex: 1 1 150px; }
-    .source-tracks .table-scroll { max-height: 330px; }
+    .source-tracks .table-scroll { max-height: 680px; }
     .source-compare .table-scroll { max-height: 330px; }
     .stack-6 > * + * { margin-top: 6px; }
     .btn-row {
@@ -1677,13 +1716,15 @@ def _page_html() -> str:
       z-index: 1;
     }
     .track-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(92px, 1fr));
+      display: flex;
+      align-items: center;
       gap: 6px;
-      min-width: 230px;
+      min-width: 190px;
+      justify-content: flex-start;
+      position: relative;
     }
-    .track-actions button {
-      width: 100%;
+    .track-actions > button {
+      min-width: 92px;
       padding: 6px 10px;
       border-radius: 999px;
       font-size: 12px;
@@ -1691,8 +1732,9 @@ def _page_html() -> str:
       font-weight: 670;
       letter-spacing: 0.01em;
       box-shadow: none;
+      white-space: nowrap;
     }
-    .track-actions button:hover {
+    .track-actions > button:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 10px rgba(33, 42, 54, 0.12);
     }
@@ -1715,6 +1757,56 @@ def _page_html() -> str:
       background: linear-gradient(180deg, #fff2f0, #ffe5e1);
       border-color: #e4b1a9;
       color: #9b241b;
+    }
+    .track-menu {
+      position: relative;
+    }
+    .track-menu summary {
+      list-style: none;
+      border: 1px solid #d9c9b2;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: linear-gradient(180deg, #fff, #f5f0e6);
+      font-size: 12px;
+      font-weight: 650;
+      color: #334155;
+      cursor: pointer;
+      user-select: none;
+      line-height: 1.2;
+      min-width: 62px;
+      text-align: center;
+    }
+    .track-menu summary::-webkit-details-marker { display: none; }
+    .track-menu[open] summary {
+      border-color: #b8c6da;
+      box-shadow: 0 4px 10px rgba(33, 42, 54, 0.12);
+      background: linear-gradient(180deg, #f4f8ff, #eaf1ff);
+    }
+    .track-menu-items {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 132px;
+      z-index: 12;
+      border: 1px solid #d7c8b2;
+      border-radius: 10px;
+      background: #fffefb;
+      box-shadow: 0 10px 18px rgba(33, 42, 54, 0.18);
+      padding: 6px;
+      display: grid;
+      gap: 5px;
+    }
+    .track-menu-items button {
+      width: 100%;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 640;
+      box-shadow: none;
+    }
+    .track-menu-items button:hover {
+      transform: none;
+      box-shadow: none;
     }
     .mono {
       font-family: var(--font-mono);
@@ -1761,11 +1853,33 @@ def _page_html() -> str:
       box-shadow: 0 12px 24px rgba(48, 38, 21, 0.22);
       padding: 8px 10px;
     }
+    .logbar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
     .logbar h2 {
-      margin: 0 0 6px;
+      margin: 0;
       font-family: var(--font-display);
       font-size: 17px;
       color: #1f3650;
+    }
+    .logbar-tools {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .logbar-tools button {
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    .log-current {
+      margin-bottom: 6px;
+      font-size: 12px;
     }
     #logLines {
       font-family: var(--font-mono);
@@ -1781,6 +1895,41 @@ def _page_html() -> str:
       overflow-x: hidden;
       white-space: pre-wrap;
       word-break: break-word;
+    }
+    .logbar.collapsed #logLines,
+    .logbar.collapsed .log-current {
+      display: none;
+    }
+    .undo-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 182px;
+      transform: translateX(-50%);
+      width: min(860px, 92vw);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #e2bc85;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fffaf0, #fff4df);
+      box-shadow: 0 10px 18px rgba(72, 44, 14, 0.2);
+      padding: 8px 10px;
+    }
+    .undo-bar.hidden { display: none; }
+    .undo-bar #undoText {
+      flex: 1;
+      font-size: 13px;
+      color: #6b4423;
+    }
+    .undo-bar button {
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 680;
+      background: linear-gradient(160deg, #145cb8, #0e4b95);
+      color: #fff;
+      border-color: transparent;
     }
     .target-grid {
       display: grid;
@@ -1809,9 +1958,14 @@ def _page_html() -> str:
       .topology, .summary, .pool, .source, .sync, .ecosystem { grid-column: 1 / -1; }
       .summary-layout { grid-template-columns: 1fr; }
       .kpi-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+      .summary-subgrid { grid-template-columns: 1fr; }
       .split-2 { grid-template-columns: 1fr; }
+      .source-shell { grid-template-columns: 1fr; }
+      .source-side-stack { grid-template-columns: 1fr; }
+      .source-mobile-tabs { display: grid; }
+      .source-side-stack.tab-form .source-compare { display: none; }
+      .source-side-stack.tab-compare .source-form { display: none; }
       .source-form-grid { grid-template-columns: 1fr; }
-      .source-split { grid-template-columns: 1fr; }
       .source-compare-grid { grid-template-columns: 1fr; }
       .hero-console-grid { grid-template-columns: 1fr; }
       .summary-actions button { width: 100%; }
@@ -1822,7 +1976,31 @@ def _page_html() -> str:
         padding: 4px 10px 3px;
       }
       .track-actions {
-        grid-template-columns: 1fr;
+        min-width: 0;
+      }
+      .track-actions > button {
+        min-width: 82px;
+      }
+      .undo-bar {
+        bottom: 172px;
+        width: 94vw;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .undo-bar button {
+        align-self: flex-end;
+      }
+      .logbar-tools {
+        justify-content: flex-end;
+      }
+      .task-stats {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .summary-main {
+        min-height: 0;
+      }
+      .summary-actions {
         min-width: 0;
       }
     }
@@ -1857,15 +2035,15 @@ def _page_html() -> str:
 
     <section class="card topology">
       <div class="card-head">
-        <h2>主界面总览（Source / Pool / Agent）</h2>
+        <h2>主界面总览（Source / Pool）</h2>
         <span id="topologyCount" class="pill">0 行</span>
       </div>
-      <div class="card-hint">Target 的 Skills 显示本地存在数量（即视为已布设）。</div>
+      <div class="card-hint">此处仅展示 Source 与 Pool；Agent 目标请在“同步工具”查看与操作。</div>
       <div class="table-scroll tall">
         <table>
           <thead>
             <tr>
-              <th>层级</th><th>ID</th><th>名称</th><th>属主</th><th>位置/地址</th>
+              <th>层级</th><th>Source ID</th><th>Source 名称</th><th>Agent ID</th><th>源地址</th>
               <th>Skills</th><th>状态</th><th>漂移</th><th>更新时间</th>
             </tr>
           </thead>
@@ -1881,50 +2059,66 @@ def _page_html() -> str:
       </div>
       <div class="summary-layout">
         <div class="summary-main">
-          <div class="kpi-grid">
-            <div class="kpi">
-              <div class="kpi-label">Pool Skills</div>
-              <div class="kpi-value" id="kpiPoolTotal">-</div>
+          <div class="summary-core">
+            <div class="kpi-grid">
+              <div class="kpi">
+                <div class="kpi-label">Pool Skills</div>
+                <div class="kpi-value" id="kpiPoolTotal">-</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Source（已登记/总候选）</div>
+                <div class="kpi-value" id="kpiSourceTotal">-</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Agent出口（已授权/总数）</div>
+                <div class="kpi-value" id="kpiTargetTotal">-</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Check 漂移</div>
+                <div class="kpi-value" id="kpiDriftTotal">-</div>
+              </div>
             </div>
-            <div class="kpi">
-              <div class="kpi-label">Source（已登记/总候选）</div>
-              <div class="kpi-value" id="kpiSourceTotal">-</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Agent出口（已授权/总数）</div>
-              <div class="kpi-value" id="kpiTargetTotal">-</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Check 漂移</div>
-              <div class="kpi-value" id="kpiDriftTotal">-</div>
+            <div class="summary-meta">
+              <div class="summary-meta-row">
+                <span>Pool目录</span>
+                <span id="summaryPoolDir" class="mono">-</span>
+              </div>
+              <div class="summary-meta-row">
+                <span>网络代理</span>
+                <span id="summaryProxy" class="mono">-</span>
+              </div>
             </div>
           </div>
-          <div class="summary-meta">
-            <div class="summary-meta-row">
-              <span>Pool目录</span>
-              <span id="summaryPoolDir" class="mono">-</span>
+          <div class="summary-subgrid">
+            <div class="panel">
+              <div class="summary-sources-title">来源分布（Top 12）</div>
+              <div id="poolSourceChips" class="source-chip-cloud"></div>
             </div>
-            <div class="summary-meta-row">
-              <span>网络代理</span>
-              <span id="summaryProxy" class="mono">-</span>
-            </div>
-          </div>
-          <div class="summary-chips-title">来源分布（Top 12）</div>
-          <div id="poolSourceChips"></div>
-          <div class="panel" style="margin-top:8px;">
-            <div class="panel-title">
-              <span>Check 结果（未纳入 Pool）</span>
-              <span id="driftCount" class="pill">0 条</span>
-            </div>
-            <div class="table-scroll short">
-              <table>
-                <thead><tr><th>Agent</th><th>Skill</th><th>目录</th><th>原因</th><th>操作</th></tr></thead>
-                <tbody id="driftRows"></tbody>
-              </table>
+            <div class="panel summary-drift-panel">
+              <div class="panel-title">
+                <span>Check 结果（未纳入 Pool）</span>
+                <span id="driftCount" class="pill">0 条</span>
+              </div>
+              <div class="table-scroll short">
+                <table>
+                  <thead><tr><th>Agent</th><th>Skill</th><th>目录</th><th>原因</th><th>操作</th></tr></thead>
+                  <tbody id="driftRows"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
         <div class="summary-actions">
+          <div class="panel task-panel stack-6">
+            <div class="panel-title"><span>任务队列</span></div>
+            <div class="task-stats">
+              <div class="task-stat">运行中<b id="taskRunning">0</b></div>
+              <div class="task-stat">成功<b id="taskSuccess">0</b></div>
+              <div class="task-stat">失败<b id="taskError">0</b></div>
+            </div>
+            <div class="hint">当前任务</div>
+            <div id="taskCurrent" class="mono">-</div>
+          </div>
           <button class="primary" onclick="refreshAll()">刷新总览</button>
           <button class="alt" onclick="runDriftCheck()">扫描并检查</button>
           <button onclick="promoteAllDrift()">全部纳入 Pool</button>
@@ -1941,45 +2135,38 @@ def _page_html() -> str:
       </div>
       <div class="card-hint">先登记 Source，再做差异比较，最后按需导入到 Pool。</div>
       <div class="source-shell">
-        <div class="panel source-form stack-6">
-          <div class="panel-title">
-            <span>① 新增 Source（登记入口）</span>
-            <span class="pill">GitHub / Git</span>
+        <div id="sourceSideStack" class="source-side-stack tab-form">
+          <div class="source-mobile-tabs">
+            <button id="sourceTabForm" class="active" onclick="setSourceTab('form')">① 新增</button>
+            <button id="sourceTabCompare" onclick="setSourceTab('compare')">③ 比较</button>
           </div>
-          <div class="source-form-grid">
-            <div>
-              <label>Agent ID</label>
-              <input id="trackAgent" placeholder="openai/deepseek..." />
+          <div class="panel source-form stack-6">
+            <div class="panel-title">
+              <span>① 新增 Source（登记入口）</span>
+              <span class="pill">GitHub / Git</span>
             </div>
-            <div>
-              <label>Source 名称</label>
-              <input id="trackName" placeholder="source name" />
+            <div class="source-form-grid">
+              <div>
+                <label>Agent ID</label>
+                <input id="trackAgent" placeholder="openai/deepseek..." />
+              </div>
+              <div>
+                <label>Source 名称</label>
+                <input id="trackName" placeholder="source name" />
+              </div>
+              <div>
+                <label>Source ID（可空）</label>
+                <input id="trackId" placeholder="auto" />
+              </div>
+              <div class="wide">
+                <label>源地址</label>
+                <input id="trackSource" placeholder="https://github.com/org/repo.git" />
+              </div>
             </div>
-            <div>
-              <label>Source ID（可空）</label>
-              <input id="trackId" placeholder="auto" />
-            </div>
-            <div class="wide">
-              <label>GitHub 源地址</label>
-              <input id="trackSource" placeholder="https://github.com/org/repo.git" />
-            </div>
-          </div>
-          <div class="source-flags">
-            <label><input id="trackEnabled" type="checkbox" checked /> enabled</label>
-            <label><input id="trackAutoFollow" type="checkbox" checked /> auto follow</label>
-            <button class="primary" onclick="addTrack()">新增 Source</button>
-          </div>
-        </div>
-
-        <div class="source-split">
-          <div class="panel source-tracks stack-6">
-            <div class="panel-title"><span>② 已登记 Source（跟踪与导入）</span></div>
-            <div class="hint">行内可直接执行：用于比较 / 检查 / 全量导入 / 删除。</div>
-            <div class="table-scroll">
-              <table>
-                <thead><tr><th>ID</th><th>源地址</th><th>快照</th><th>操作</th></tr></thead>
-                <tbody id="trackRows"></tbody>
-              </table>
+            <div class="source-flags">
+              <label><input id="trackEnabled" type="checkbox" checked /> enabled</label>
+              <label><input id="trackAutoFollow" type="checkbox" checked /> auto follow</label>
+              <button class="primary" onclick="addTrack()">新增 Source</button>
             </div>
           </div>
 
@@ -2006,6 +2193,17 @@ def _page_html() -> str:
                 <tbody id="compareRows"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <div class="panel source-tracks stack-6">
+          <div class="panel-title"><span>② 已登记 Source（跟踪与导入）</span></div>
+          <div class="hint">行内可直接执行：用于比较 / 检查 / 全量导入 / 删除。</div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Source ID</th><th>Source 名称</th><th>Agent ID</th><th>源地址</th><th>快照</th><th>操作</th></tr></thead>
+              <tbody id="trackRows"></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -2090,9 +2288,21 @@ def _page_html() -> str:
     </section>
   </div>
 
-  <section class="logbar">
-    <h2>实时日志</h2>
+  <section id="logBar" class="logbar">
+    <div class="logbar-head">
+      <h2>实时日志</h2>
+      <div class="logbar-tools">
+        <button id="logFilterBtn" onclick="toggleLogFilter()">仅看当前任务：关</button>
+        <button id="logCollapseBtn" onclick="toggleLogCollapse()">折叠</button>
+      </div>
+    </div>
+    <div class="log-current">当前任务：<span id="logCurrentTask" class="mono">-</span></div>
     <div id="logLines"></div>
+  </section>
+  <section id="undoBar" class="undo-bar hidden">
+    <div id="undoText">待执行操作</div>
+    <span id="undoCountdown" class="pill">0s</span>
+    <button onclick="undoPendingAction()">撤销</button>
   </section>
 
   <script>
@@ -2104,22 +2314,185 @@ def _page_html() -> str:
       poolSelected: {},
       driftRows: [],
       jobs: {},
-      logLines: [],
+      logEntries: [],
+      logFilterCurrent: false,
+      logCollapsed: false,
+      currentJobKey: '',
+      currentJobLabel: '',
+      jobStats: { success: 0, error: 0 },
+      pendingAction: null,
+      undoTicker: null,
+      sourceMobileTab: 'form',
     };
 
     function nowText() { return new Date().toLocaleTimeString(); }
+    function applySourceTab() {
+      const root = document.getElementById('sourceSideStack');
+      const btnForm = document.getElementById('sourceTabForm');
+      const btnCompare = document.getElementById('sourceTabCompare');
+      if (!root || !btnForm || !btnCompare) return;
+      const tab = state.sourceMobileTab === 'compare' ? 'compare' : 'form';
+      root.classList.toggle('tab-form', tab === 'form');
+      root.classList.toggle('tab-compare', tab === 'compare');
+      btnForm.classList.toggle('active', tab === 'form');
+      btnCompare.classList.toggle('active', tab === 'compare');
+    }
+    function setSourceTab(tab) {
+      state.sourceMobileTab = tab === 'compare' ? 'compare' : 'form';
+      applySourceTab();
+    }
+    function normalizeCurrentJob() {
+      const ids = Object.keys(state.jobs);
+      if (!ids.length) {
+        state.currentJobKey = '';
+        state.currentJobLabel = '';
+        return;
+      }
+      const hasCurrent = ids.some((jobId) => {
+        const row = state.jobs[jobId];
+        return row && row.key === state.currentJobKey;
+      });
+      if (hasCurrent) return;
+      const first = state.jobs[ids[0]];
+      state.currentJobKey = (first && first.key) ? first.key : '';
+      state.currentJobLabel = (first && first.label) ? first.label : '';
+    }
+    function updateTaskPanel() {
+      normalizeCurrentJob();
+      const running = Object.keys(state.jobs).length;
+      const runningEl = document.getElementById('taskRunning');
+      const successEl = document.getElementById('taskSuccess');
+      const errorEl = document.getElementById('taskError');
+      const currentEl = document.getElementById('taskCurrent');
+      const logCurrentEl = document.getElementById('logCurrentTask');
+      if (runningEl) runningEl.textContent = String(running);
+      if (successEl) successEl.textContent = String(state.jobStats.success);
+      if (errorEl) errorEl.textContent = String(state.jobStats.error);
+      const current = state.currentJobKey || '-';
+      if (currentEl) currentEl.textContent = current;
+      if (logCurrentEl) logCurrentEl.textContent = current;
+      applyLogUiState();
+    }
+    function visibleLogEntries() {
+      if (!state.logFilterCurrent || !state.currentJobKey) return state.logEntries;
+      return state.logEntries.filter((x) => !x.jobKey || x.jobKey === state.currentJobKey);
+    }
+    function applyLogUiState() {
+      const bar = document.getElementById('logBar');
+      const filterBtn = document.getElementById('logFilterBtn');
+      const collapseBtn = document.getElementById('logCollapseBtn');
+      if (bar) bar.classList.toggle('collapsed', !!state.logCollapsed);
+      if (filterBtn) {
+        filterBtn.textContent = `仅看当前任务：${state.logFilterCurrent ? '开' : '关'}`;
+        filterBtn.classList.toggle('alt', !!state.logFilterCurrent);
+      }
+      if (collapseBtn) {
+        collapseBtn.textContent = state.logCollapsed ? '展开' : '折叠';
+      }
+    }
     function renderLog() {
       const box = document.getElementById('logLines');
+      if (!box) return;
       const keepBottom = (box.scrollTop + box.clientHeight) >= (box.scrollHeight - 12);
-      box.textContent = state.logLines.join('\\n');
+      box.textContent = visibleLogEntries().map((x) => x.line).join('\\n');
       if (keepBottom) {
         box.scrollTop = box.scrollHeight;
       }
     }
-    function log(msg) {
-      state.logLines.push(`[${nowText()}] ${msg}`);
-      if (state.logLines.length > 400) state.logLines.shift();
+    function log(msg, opt = {}) {
+      const entry = {
+        line: `[${nowText()}] ${msg}`,
+        jobKey: String(opt.jobKey || '').trim(),
+      };
+      state.logEntries.push(entry);
+      if (state.logEntries.length > 800) state.logEntries.shift();
       renderLog();
+    }
+    function toggleLogFilter() {
+      state.logFilterCurrent = !state.logFilterCurrent;
+      applyLogUiState();
+      renderLog();
+    }
+    function toggleLogCollapse() {
+      state.logCollapsed = !state.logCollapsed;
+      applyLogUiState();
+    }
+    async function executePendingAction(pending) {
+      if (!pending || pending.done) return;
+      pending.done = true;
+      if (pending.timer) clearTimeout(pending.timer);
+      if (state.pendingAction === pending) {
+        state.pendingAction = null;
+        renderUndoBar();
+      }
+      log(`[执行] ${pending.label}`);
+      await pending.execute();
+    }
+    async function flushPendingAction() {
+      const pending = state.pendingAction;
+      if (!pending) return;
+      try {
+        await executePendingAction(pending);
+      } catch (e) {
+        log(`延迟动作失败: ${e.message}`);
+      }
+    }
+    function renderUndoBar() {
+      const bar = document.getElementById('undoBar');
+      const textEl = document.getElementById('undoText');
+      const secEl = document.getElementById('undoCountdown');
+      if (!bar || !textEl || !secEl) return;
+      const pending = state.pendingAction;
+      if (!pending) {
+        bar.classList.add('hidden');
+        if (state.undoTicker) {
+          clearInterval(state.undoTicker);
+          state.undoTicker = null;
+        }
+        return;
+      }
+      const left = Math.max(0, Math.ceil((pending.deadline - Date.now()) / 1000));
+      textEl.textContent = pending.label;
+      secEl.textContent = `${left}s`;
+      bar.classList.remove('hidden');
+      if (!state.undoTicker) {
+        state.undoTicker = setInterval(() => {
+          if (!state.pendingAction) {
+            renderUndoBar();
+            return;
+          }
+          const remain = Math.max(0, Math.ceil((state.pendingAction.deadline - Date.now()) / 1000));
+          const timerEl = document.getElementById('undoCountdown');
+          if (timerEl) timerEl.textContent = `${remain}s`;
+        }, 250);
+      }
+    }
+    async function scheduleUndoableAction(label, execute, delayMs = 5000) {
+      await flushPendingAction();
+      const pending = {
+        label,
+        execute,
+        deadline: Date.now() + delayMs,
+        timer: null,
+        done: false,
+      };
+      pending.timer = setTimeout(() => {
+        void executePendingAction(pending).catch((e) => {
+          log(`延迟动作失败: ${e.message}`);
+        });
+      }, delayMs);
+      state.pendingAction = pending;
+      renderUndoBar();
+      log(`[可撤销] ${label}（${Math.ceil(delayMs / 1000)} 秒内）`);
+    }
+    function undoPendingAction() {
+      const pending = state.pendingAction;
+      if (!pending) return;
+      pending.done = true;
+      if (pending.timer) clearTimeout(pending.timer);
+      state.pendingAction = null;
+      renderUndoBar();
+      log(`[已撤销] ${pending.label}`);
     }
 
     function applyEcosystemVisibility(hidden) {
@@ -2183,8 +2556,12 @@ def _page_html() -> str:
     function watchJob(jobId, label) {
       if (!jobId || state.jobs[jobId]) return;
       const shortId = jobId.slice(0, 8);
-      state.jobs[jobId] = { cursor: 0, busy: false, timer: null };
-      log(`[任务提交] ${label} #${shortId}`);
+      const jobKey = `${label}#${shortId}`;
+      state.jobs[jobId] = { cursor: 0, busy: false, timer: null, key: jobKey, label };
+      state.currentJobKey = jobKey;
+      state.currentJobLabel = label;
+      updateTaskPanel();
+      log(`[任务提交] ${label} #${shortId}`, { jobKey });
 
       const tick = async () => {
         const w = state.jobs[jobId];
@@ -2192,37 +2569,44 @@ def _page_html() -> str:
         w.busy = true;
         try {
           const data = await api(`/api/jobs/${encodeURIComponent(jobId)}?cursor=${w.cursor}`);
-          for (const line of data.logs || []) log(`[${label}#${shortId}] ${line}`);
+          for (const line of data.logs || []) log(`[${jobKey}] ${line}`, { jobKey });
           w.cursor = data.next_cursor || w.cursor;
           if (data.status === 'success' || data.status === 'error') {
             clearInterval(w.timer);
             delete state.jobs[jobId];
-          if (data.status === 'success' && data.result) {
+            if (data.status === 'success') state.jobStats.success += 1;
+            else state.jobStats.error += 1;
+            if (data.status === 'success' && data.result) {
               const result = data.result;
               if (result.compare && Array.isArray(result.items)) {
                 state.compareItems = result.items;
                 state.compareSource = result.source || state.compareSource;
                 state.compareSelected = {};
                 renderCompareRows();
-                log(`[差异结果] 来源 ${result.total} 条，新增 ${result.new_total} 条`);
+                log(`[差异结果] 来源 ${result.total} 条，新增 ${result.new_total} 条`, { jobKey });
               }
               if (Array.isArray(result.rows) && result.counts_by_agent !== undefined) {
                 state.driftRows = result.rows;
                 renderDriftRows();
-                log(`[Check结果] 共 ${result.total ?? result.rows.length} 条`);
+                log(`[Check结果] 共 ${result.total ?? result.rows.length} 条`, { jobKey });
               }
               if (result.success_total !== undefined && result.failed_total !== undefined) {
-                log(`[纳入结果] 成功 ${result.success_total}，失败 ${result.failed_total}`);
+                log(`[纳入结果] 成功 ${result.success_total}，失败 ${result.failed_total}`, { jobKey });
               }
             }
-            log(`[任务结束] ${label} #${shortId} -> ${data.status}`);
-            if (data.error) log(`[任务错误] ${label} #${shortId}: ${data.error}`);
+            log(`[任务结束] ${label} #${shortId} -> ${data.status}`, { jobKey });
+            if (data.error) log(`[任务错误] ${label} #${shortId}: ${data.error}`, { jobKey });
+            updateTaskPanel();
+            renderLog();
             await refreshAll();
           }
         } catch (e) {
           clearInterval(w.timer);
           delete state.jobs[jobId];
-          log(`[任务异常] ${label} #${shortId}: ${e.message}`);
+          state.jobStats.error += 1;
+          log(`[任务异常] ${label} #${shortId}: ${e.message}`, { jobKey });
+          updateTaskPanel();
+          renderLog();
         } finally {
           if (state.jobs[jobId]) state.jobs[jobId].busy = false;
         }
@@ -2261,9 +2645,7 @@ def _page_html() -> str:
       tbody.innerHTML = rows.map((x) => {
         const layer = x.layer === 'source'
           ? '<span class="pill">SOURCE</span>'
-          : x.layer === 'pool'
-            ? '<span class="pill">POOL</span>'
-            : '<span class="pill">TARGET</span>';
+          : '<span class="pill">POOL</span>';
         const drift = String(x.drift) === '0'
           ? '<span class="pill">0</span>'
           : (String(x.drift) === '-' ? '-' : `<span class="pill warn">${escapeHtml(x.drift)}</span>`);
@@ -2354,14 +2736,21 @@ def _page_html() -> str:
           : `${x.snapshot_total} @ ${x.snapshot_checked_at || '-'}`;
         return `<tr>
           <td class="mono">${escapeHtml(x.id)}</td>
+          <td>${escapeHtml(x.name || x.id)}</td>
+          <td class="mono">${escapeHtml(x.agent_id || '-')}</td>
           <td class="mono">${escapeHtml(x.source)}</td>
           <td class="mono">${escapeHtml(snap)}</td>
           <td>
             <div class="track-actions">
               <button class="btn-compare" title="将该来源填入下方比较输入框" onclick="useSourceForCompare('${encodeURIComponent(x.source)}')">用于比较</button>
-              <button class="btn-check" title="检查该来源与上次快照的新增/移除差异" onclick="checkTrack('${encodeURIComponent(x.id)}')">检查</button>
-              <button class="btn-import" title="将该来源的全部技能导入 Pool" onclick="importTrackAll('${encodeURIComponent(x.id)}')">全量导入</button>
-              <button class="btn-delete" title="删除这条来源跟踪记录" onclick="removeTrack('${encodeURIComponent(x.id)}')">删除</button>
+              <details class="track-menu">
+                <summary>更多</summary>
+                <div class="track-menu-items">
+                  <button class="btn-check" title="检查该来源与上次快照的新增/移除差异" onclick="checkTrack('${encodeURIComponent(x.id)}')">检查</button>
+                  <button class="btn-import" title="将该来源的全部技能导入 Pool" onclick="importTrackAll('${encodeURIComponent(x.id)}')">全量导入</button>
+                  <button class="btn-delete" title="删除这条来源跟踪记录" onclick="removeTrack('${encodeURIComponent(x.id)}')">删除</button>
+                </div>
+              </details>
             </div>
           </td>
         </tr>`;
@@ -2395,6 +2784,7 @@ def _page_html() -> str:
       const source = decodeURIComponent(encodedSource);
       document.getElementById('compareSourceInput').value = source;
       state.compareSource = source;
+      setSourceTab('compare');
       log('已选择 source: ' + source);
     }
 
@@ -2463,6 +2853,8 @@ def _page_html() -> str:
           state.driftRows = data.drift.rows;
           renderDriftRows();
         }
+        updateTaskPanel();
+        applySourceTab();
       } catch (e) {
         log('刷新失败: ' + e.message);
       }
@@ -2509,6 +2901,7 @@ def _page_html() -> str:
       if (!isRemoteSource(source)) return log('当前策略只接受 GitHub/Git 远程源。');
       state.compareSource = source;
       document.getElementById('compareSourceInput').value = source;
+      setSourceTab('compare');
       try {
         const data = await api('/api/source/compare', 'POST', { source, async: true });
         if (data.accepted && data.job_id) return watchJob(data.job_id, 'source比较');
@@ -2537,12 +2930,10 @@ def _page_html() -> str:
       const selected = Object.keys(state.compareSelected);
       if (!source) return log('请先比较来源。');
       if (!selected.length) return log('请先选中候选 skill。');
-      try {
+      await scheduleUndoableAction(`导入 ${selected.length} 个候选 skill`, async () => {
         const data = await api('/api/source/import', 'POST', { source, skills: selected, async: true });
-        if (data.accepted && data.job_id) return watchJob(data.job_id, '导入候选');
-      } catch (e) {
-        log('导入失败: ' + e.message);
-      }
+        if (data.accepted && data.job_id) watchJob(data.job_id, '导入候选');
+      });
     }
 
     async function importAllNewCandidates() {
@@ -2550,12 +2941,10 @@ def _page_html() -> str:
       if (!source) return log('请先比较来源。');
       const selected = (state.compareItems || []).filter((x) => !x.in_pool).map((x) => x.rel_dir);
       if (!selected.length) return log('当前没有新增候选。');
-      try {
+      await scheduleUndoableAction(`导入全部新增候选（${selected.length} 项）`, async () => {
         const data = await api('/api/source/import', 'POST', { source, skills: selected, async: true });
-        if (data.accepted && data.job_id) return watchJob(data.job_id, '导入新增候选');
-      } catch (e) {
-        log('导入失败: ' + e.message);
-      }
+        if (data.accepted && data.job_id) watchJob(data.job_id, '导入新增候选');
+      });
     }
 
     async function addTrack() {
@@ -2584,14 +2973,11 @@ def _page_html() -> str:
 
     async function removeTrack(encodedId) {
       const id = decodeURIComponent(encodedId);
-      if (!confirm(`确认删除 ${id} ?`)) return;
-      try {
+      await scheduleUndoableAction(`删除 Source: ${id}`, async () => {
         await api('/api/tracks/' + encodeURIComponent(id), 'DELETE');
         log('已删除 Source: ' + id);
         await refreshAll();
-      } catch (e) {
-        log('删除失败: ' + e.message);
-      }
+      });
     }
 
     async function checkTrack(encodedId) {
@@ -2608,12 +2994,10 @@ def _page_html() -> str:
 
     async function importTrackAll(encodedId) {
       const id = decodeURIComponent(encodedId);
-      try {
+      await scheduleUndoableAction(`全量导入 Source: ${id}`, async () => {
         const data = await api('/api/tracks/import', 'POST', { id, all: true, async: true });
-        if (data.accepted && data.job_id) return watchJob(data.job_id, `源导入:${id}`);
-      } catch (e) {
-        log('Track 导入失败: ' + e.message);
-      }
+        if (data.accepted && data.job_id) watchJob(data.job_id, `源导入:${id}`);
+      });
     }
 
     function selectedSyncTargets() {
@@ -2707,11 +3091,16 @@ def _page_html() -> str:
       if (!value) return;
       document.getElementById('compareSourceInput').value = value;
       state.compareSource = value;
+      setSourceTab('compare');
     });
 
     document.getElementById('poolFilter').addEventListener('input', () => renderPoolRows());
 
     applyEcosystemVisibility(localStorage.getItem('skillctl.ecos_hidden') === '1');
+    applySourceTab();
+    updateTaskPanel();
+    applyLogUiState();
+    renderUndoBar();
     renderLog();
     refreshAll();
   </script>
